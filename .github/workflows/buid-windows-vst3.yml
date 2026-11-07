@@ -1,1 +1,36 @@
+name: Build Windows VST3
 
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+      - name: Configure release build (downloads JUCE)
+        shell: pwsh
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+      - name: Compile 64-bit Windows VST3
+        shell: pwsh
+        run: cmake --build build --config Release --target AcidLine303_VST3 --parallel 4
+      - name: Collect plugin bundle
+        shell: pwsh
+        run: |
+          $plugins = @(Get-ChildItem -Path build -Recurse -Directory -Filter '*.vst3' | Where-Object { $_.FullName -match '[\\/]VST3[\\/]' })
+          if ($plugins.Count -ne 1) { throw "Expected one VST3 plugin bundle; found $($plugins.Count)." }
+          New-Item -ItemType Directory -Force -Path output | Out-Null
+          Copy-Item -LiteralPath $plugins[0].FullName -Destination output -Recurse -Force
+          Write-Host "Ready: $($plugins[0].Name)"
+      - name: Upload built plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: AcidLine303-Windows-VST3
+          path: output/
+          if-no-files-found: error
+          retention-days: 30
