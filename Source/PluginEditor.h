@@ -15,6 +15,10 @@ private:
     std::array<juce::Slider, 7> knobs;
     std::array<juce::Label, 7> labels;
     std::array<std::unique_ptr<SliderAttach>, 7> knobAttachments;
+    static juce::StringArray patternNames();
+    void loadSelectedPattern();
+    juce::ComboBox patternPicker;
+    juce::TextButton loadPatternButton;
     juce::ComboBox waveform;
     std::unique_ptr<ComboAttach> waveAttachment;
     juce::ToggleButton seqButton{"Host-synced sequencer"};

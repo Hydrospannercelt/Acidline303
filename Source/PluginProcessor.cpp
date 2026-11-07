@@ -22,10 +22,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout AcidLineAudioProcessor::make
     for (int i = 0; i < 16; ++i) {
         juce::StringArray notes;
         const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-        for (int n = 48; n <= 72; ++n) notes.add(juce::String(names[n % 12]) + juce::String(n / 12 - 1));
+        for (int n = 24; n <= 84; ++n) notes.add(juce::String(names[n % 12]) + juce::String(n / 12 - 1));
         const int pattern[] = {12,12,19,12,15,12,22,19,12,24,19,15,12,15,19,10};
         layout.add(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID{stepId(i,"note"),1}, "Step " + juce::String(i+1) + " Note", notes, pattern[i]));
+            juce::ParameterID{stepId(i,"note"),1}, "Step " + juce::String(i+1) + " Note", notes, pattern[i] + 24));
         layout.add(std::make_unique<juce::AudioParameterBool>(
             juce::ParameterID{stepId(i,"on"),1}, "Step " + juce::String(i+1) + " Enabled", i != 7 && i != 15));
         layout.add(std::make_unique<juce::AudioParameterBool>(
@@ -47,7 +47,7 @@ void AcidLineAudioProcessor::beginStep() {
     bool on = val("on") > 0.5f;
     bool acc = val("acc") > 0.5f;
     bool slide = val("slide") > 0.5f;
-    if (on) voice.noteOn(48 + (int)std::lround(val("note")), acc, previousStepSlides);
+    if (on) voice.noteOn(24 + (int)std::lround(val("note")), acc, previousStepSlides);
     else voice.noteOff();
     previousStepSlides = on && slide;
 }

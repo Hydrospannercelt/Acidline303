@@ -2,7 +2,7 @@
 
 AcidLineAudioProcessorEditor::AcidLineAudioProcessorEditor(AcidLineAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p) {
-    setSize(1030, 420);
+    setSize(1030, 483);
     const char* ids[] = {"cutoff","resonance","envmod","decay","accent","drive","tune"};
     const char* names[] = {"CUTOFF","RESONANCE","ENV MOD","DECAY","ACCENT","DRIVE","TUNE"};
     for (int i = 0; i < 7; ++i) {
@@ -20,10 +20,16 @@ AcidLineAudioProcessorEditor::AcidLineAudioProcessorEditor(AcidLineAudioProcesso
     waveAttachment = std::make_unique<ComboAttach>(p.state, "wave", waveform);
     addAndMakeVisible(seqButton);
     seqAttachment = std::make_unique<ButtonAttach>(p.state,"seq",seqButton);
+    for (const auto& name : patternNames()) patternPicker.addItem(name, patternPicker.getNumItems() + 1);
+    addAndMakeVisible(patternPicker);
+    patternPicker.setSelectedId(1, juce::dontSendNotification);
+    loadPatternButton.setButtonText("LOAD PATTERN");
+    addAndMakeVisible(loadPatternButton);
+    loadPatternButton.onClick = [this] { loadSelectedPattern(); };
     for (int i = 0; i < 16; ++i) {
-        for (int n = 0; n <= 24; ++n) {
+        for (int n = 0; n <= 60; ++n) {
             const char* pitch[] = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
-            const int midi = n + 48;
+            const int midi = n + 24;
             notes[i].addItem(juce::String(pitch[midi % 12]) + juce::String(midi / 12 - 1), n+1);
         }
         addAndMakeVisible(notes[i]);
@@ -45,6 +51,11 @@ void AcidLineAudioProcessorEditor::paint(juce::Graphics& g) {
     g.drawText("Independent 1980s-style acid bass instrument", 390, 24, 420, 20, juce::Justification::centredLeft);
     g.setColour(juce::Colour::fromRGB(245,166,45));
     g.drawLine(22.0f, 200.0f, 1008.0f, 200.0f, 2.0f);
+    g.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
+    g.drawText("ORIGINAL ACID PATTERN BANK", 24, 417, 250, 30, juce::Justification::centredLeft);
+    g.setFont(12.0f);
+    g.drawText("Choose a pattern and click LOAD. Replaces the current 16 steps. Save your Ableton set to keep edits.",
+               24, 455, 970, 20, juce::Justification::centredLeft);
     g.setColour(juce::Colours::lightgrey);
     g.setFont(12.0f);
     g.drawText("PITCH", 0, 245, 78, 20, juce::Justification::centredRight);
@@ -67,11 +78,59 @@ void AcidLineAudioProcessorEditor::resized() {
     }
     waveform.setBounds(810, 100, 110, 26);
     seqButton.setBounds(810, 145, 200, 28);
+    patternPicker.setBounds(290, 416, 350, 30);
+    loadPatternButton.setBounds(655, 416, 170, 30);
     for (int i = 0; i < 16; ++i) {
         const int x = 89 + i*57;
         notes[i].setBounds(x, 244, 54, 26);
         active[i].setBounds(x+18, 285, 25, 24);
         accents[i].setBounds(x+18, 323, 25, 24);
         slides[i].setBounds(x+18, 361, 25, 24);
+    }
+}
+
+// Original patterns composed for AcidLine 303, not copied from a commercial preset library.
+// MIDI note 24 = C1; '-' is a rest. Accent and slide are 16-bit step masks.
+namespace {
+struct AcidPattern { const char* name; std::array<int, 16> pitch; unsigned accent, slide; };
+constexpr AcidPattern bank[] = {
+    {"01  Warehouse Roller", {36,36,43,36,-1,48,43,36,39,36,43,-1,48,43,36,34}, 0x4529, 0x2C44},
+    {"02  Liquid Spiral",   {36,43,48,43,39,36,39,43,48,51,48,43,39,43,36,-1}, 0x9292, 0x5654},
+    {"03  Glasgow Afterhours",{33,33,-1,45,40,33,36,40,45,40,33,-1,36,40,45,33},0x4919,0x3464},
+    {"04  Rubber Duck",     {36,-1,36,48,43,36,-1,39,36,48,43,-1,36,39,43,36},0x254D,0x6214},
+    {"05  Night Tram",      {38,38,45,50,-1,45,41,38,41,45,38,50,45,-1,41,38},0x8925,0x484A},
+    {"06  Submerged",       {31,31,43,38,31,-1,43,41,38,31,38,43,46,43,38,-1},0x44A1,0x3194},
+    {"07  Berlin Steps",    {36,36,36,43,39,36,48,-1,36,39,43,48,46,43,39,36},0xA149,0x2A18},
+    {"08  Silver Machine",  {40,47,52,47,40,-1,44,47,52,54,52,47,44,40,47,-1},0x514A,0x4B44},
+    {"09  Deep Current",    {28,40,35,28,-1,35,40,28,31,35,40,43,40,35,31,28},0xA224,0x214C},
+    {"10  Plastic Funk",    {36,43,36,39,48,43,-1,36,43,48,51,48,43,39,36,-1},0x4A95,0x4892},
+    {"11  Neon Tunnel",    {34,46,41,34,46,41,38,-1,34,41,46,50,46,41,38,34},0x9524,0x3268},
+    {"12  Acid Sunrise",   {36,39,43,48,51,48,43,39,36,-1,48,43,39,36,31,36},0xA521,0x2564}
+};
+}
+
+juce::StringArray AcidLineAudioProcessorEditor::patternNames() {
+    juce::StringArray names;
+    for (const auto& pat : bank) names.add(pat.name);
+    return names;
+}
+
+void AcidLineAudioProcessorEditor::loadSelectedPattern() {
+    const int index = patternPicker.getSelectedId() - 1;
+    if (index < 0 || index >= static_cast<int>(std::size(bank))) return;
+    const auto& pat = bank[index];
+    auto set = [this](const juce::String& id, float normalized) {
+        if (auto* parameter = processor.state.getParameter(id)) {
+            parameter->beginChangeGesture();
+            parameter->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, normalized));
+            parameter->endChangeGesture();
+        }
+    };
+    for (int i=0; i<16; ++i) {
+        const bool enabled = pat.pitch[i] >= 0;
+        set(AcidLineAudioProcessor::stepId(i,"note"), static_cast<float>(juce::jlimit(24,84, enabled ? pat.pitch[i] : 24) - 24) / 60.0f);
+        set(AcidLineAudioProcessor::stepId(i,"on"), enabled ? 1.0f : 0.0f);
+        set(AcidLineAudioProcessor::stepId(i,"acc"), (pat.accent & (1u << i)) ? 1.0f : 0.0f);
+        set(AcidLineAudioProcessor::stepId(i,"slide"), (pat.slide & (1u << i)) ? 1.0f : 0.0f);
     }
 }
